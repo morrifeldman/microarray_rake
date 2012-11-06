@@ -77,7 +77,7 @@ end
 ps_or_tc = ps_or_mps == 'ps' ? 'ps' : 'tc'
 
 cel_file_txt = 'cel_files.txt'
-file "#{probe_category}/rma-sketch.summary.txt" => replicates[0] do
+file "#{probe_category}/rma-sketch.summary.txt" => cel_files[0] do
   File.open(cel_file_txt,'w') do |io|
     io << "cel_files\n"
     io << replicates.join("\n")
