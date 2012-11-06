@@ -7,7 +7,6 @@ probe_category = 'comprehensive'
 
 CLOBBER.include(probe_category, '*.CEL', '*.gz', '*_*', 'replicates.txt')
 
-probe_category = 'comprehensive'
 celDir = File.absolute_path('.')
 celFiles = File.join(celDir,'*.CEL')
 libBase = 'HuEx-1_0-st-v2.r2'
@@ -156,7 +155,7 @@ def bed_from_ps(in_file_name, col, out_file_name, track_name = nil, desc = nil)
   end
 end
 
-def bed_name(cond)
+def bed_name(cond, probe_category)
   "#{probe_category}/#{cond}.bed"
 end
 
@@ -165,7 +164,7 @@ file example_bed => "#{probe_category}/rep_average.ps" do |f|
   conditions.each do |cond|
     track_name = "raw_#{cond}"
     track_desc = "Raw Expression Values for #{cond}"
-    out_file_name = bed_name(cond)
+    out_file_name = bed_name(cond, probe_category)
     bed_from_ps(f.prerequisites[0], cond, out_file_name, track_name, track_desc)
     sh "gzip -cv #{out_file_name} > #{out_file_name}.gz"
   end
@@ -174,7 +173,7 @@ end
 multi_bed_file = "#{probe_category}/raw_multi.bed"
 file "#{multi_bed_file}.gz" => example_bed do
   conditions.each do |cond|
-    bed_file = bed_name(cond)
+    bed_file = bed_name(cond, probe_category)
     sh "cat #{bed_file} >> #{multi_bed_file}"
   end
   sh "gzip -v #{multi_bed_file}"
