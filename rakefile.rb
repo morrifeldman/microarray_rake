@@ -163,7 +163,7 @@ example_bed = "#{probe_category}/#{conditions[0]}.bed"
 file example_bed => "#{probe_category}/rep_average.ps" do |f|
   conditions.each do |cond|
     track_name = "raw_#{cond}"
-    track_desc = "Raw Expression Values for #{cond}"
+    track_desc = "Raw Expression Values for #{cond}, #{probe_category} probesets"
     out_file_name = bed_name(cond, probe_category)
     bed_from_ps(f.prerequisites[0], cond, out_file_name, track_name, track_desc)
     sh "gzip -cv #{out_file_name} > #{out_file_name}.gz"
