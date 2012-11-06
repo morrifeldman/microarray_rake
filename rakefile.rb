@@ -1,28 +1,9 @@
-require 'rake/clean'
-require 'debugger'
-require 'subroutines'
-require 'progress'
 
+# Edit the following to adjust to your microarray data:
 gse = 'GSE24391'
 
-gse_url = "http://www.ncbi.nlm.nih.gov/geosuppl/?acc=#{gse}"
-
 probe_category = 'comprehensive'
-ps_or_mps = 'mps'
-
-CLOBBER.include(probe_category, '*.CEL', '*.gz', '*_*', 'replicates.txt')
-CLOBBER.include("#{gse}.tar")
-
-celDir = File.absolute_path('.')
-celFiles = File.join(celDir,'*.CEL')
-libBase = 'HuEx-1_0-st-v2.r2'
-pgf = libBase + '.pgf'
-clf = libBase + '.clf'
-ps_or_mps_lib = "#{libBase}.dt1.hg18.#{probe_category}.#{ps_or_mps}"
-qcc = libBase + '.qcc'
-bgp = libBase + '.antigenomic.bgp'
-apt = 'apt-probeset-summarize'
-action = 'rma-sketch'
+ps_or_mps = 'ps'
 
 cel_files = %w[
   GSM601318.CEL
@@ -49,6 +30,30 @@ cel_files = %w[
 ]
 
 conditions = %w[E000 E020 E040 E060 E120 E240 E480]
+
+# Below here might not need editing if all goes well.
+
+gse_url = "http://www.ncbi.nlm.nih.gov/geosuppl/?acc=#{gse}"
+
+require 'rake/clean'
+require 'debugger'
+require 'subroutines'
+require 'progress'
+
+CLOBBER.include(probe_category, '*.CEL', '*.gz', '*_*', 'replicates.txt')
+CLOBBER.include("#{gse}.tar")
+
+celDir = File.absolute_path('.')
+celFiles = File.join(celDir,'*.CEL')
+libBase = 'HuEx-1_0-st-v2.r2'
+pgf = libBase + '.pgf'
+clf = libBase + '.clf'
+ps_or_mps_lib = "#{libBase}.dt1.hg18.#{probe_category}.#{ps_or_mps}"
+qcc = libBase + '.qcc'
+bgp = libBase + '.antigenomic.bgp'
+apt = 'apt-probeset-summarize'
+action = 'rma-sketch'
+
 replicates = conditions.each_with_object([]) do |cond, acc|
   3.times {|i| acc << "#{cond}_#{i+1}"}
 end
