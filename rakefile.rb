@@ -3,9 +3,14 @@ require 'debugger'
 require 'subroutines'
 require 'progress'
 
+gse = 'GSE24391'
+
+gse_url = "http://www.ncbi.nlm.nih.gov/geosuppl/?acc=#{gse}"
+
 probe_category = 'comprehensive'
 
 CLOBBER.include(probe_category, '*.CEL', '*.gz', '*_*', 'replicates.txt')
+CLOBBER.include("#{gse}.tar")
 
 celDir = File.absolute_path('.')
 celFiles = File.join(celDir,'*.CEL')
@@ -17,12 +22,6 @@ qcc = libBase + '.qcc'
 bgp = libBase + '.antigenomic.bgp'
 apt = 'apt-probeset-summarize'
 action = 'rma-sketch'
-
-zipGSE = '/Volumes/Spin/GSE/GSE24391_RAW.tar'
-
-file 'GSM601318.CEL' do
-
-end
 
 cel_files = %w[
   GSM601318.CEL
@@ -55,8 +54,13 @@ end
 
 file_hash = Hash[cel_files.zip(replicates)]
 
-file replicates[0] do
-  sh "tar xvf #{zipGSE}"
+tar_file = "#{gse}.tar"
+file tar_file do |f|
+  sh "curl -o #{f.name} #{gse_url}"
+end
+
+file replicates[0] => tar_file do
+  sh "tar xvf #{gse}.tar"
   sh "gunzip -v *.gz"
   file_hash.each do |orig_name, new_name|
     puts "moving #{orig_name} to #{new_name}"
