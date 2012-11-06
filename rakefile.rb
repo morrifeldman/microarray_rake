@@ -7,7 +7,6 @@ probe_category = 'comprehensive'
 
 CLOBBER.include(probe_category, '*.CEL', '*.gz', '*_*', 'replicates.txt')
 
-probe_category = 'comprehensive'
 celDir = File.absolute_path('.')
 celFiles = File.join(celDir,'*.CEL')
 libBase = 'HuEx-1_0-st-v2.r2'
