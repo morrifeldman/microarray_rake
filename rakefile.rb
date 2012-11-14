@@ -1,44 +1,16 @@
+require_relative 'microarray_config'
 
-# Edit the following to adjust to your microarray data:
-#####################################################
-
-# uncomment and set to gse number to use a gse
-# gse =
-
-orig_cel_names = %w[
-  GFP_0.CEL
-  GFP_1.CEL
-  HER2_0.CEL
-  HER2_1.CEL
-]
-
-probe_category = 'comprehensive'
-
-orig_cel_dir = if defined? gse
-  '../gse'
-  else
-  # This points to your input cel files if you not downloading a gse
-  '../Raw_HER2'
-end
-
-conditions = %w[control her2]
-
-control_name = 'control'
-
-n_reps = 2
-
-cel_dir = 'cel_data'
 # Replace this if your data are not in simple replicates
 # Meaning you did a different number of reps for each condition
-cel_files = conditions.inject([]) do |acc, cond|
-  n_reps.times {|i| acc << File.join(cel_dir, "#{cond}_#{i+1}")}
+cel_files = Conditions.inject([]) do |acc, cond|
+  N_reps.times {|i| acc << File.join(Cel_dir, "#{cond}_#{i+1}")}
   acc
 end
 
 #######################################
 ## Below here might not need editing if all goes well.
 
-orig_cel_files = orig_cel_names.map{|cel| File.join(orig_cel_dir, cel)}
+orig_cel_files = Orig_cel_names.map{|cel| File.join(Orig_cel_dir, cel)}
 
 require 'rake/clean'
 require_relative 'lib/mar_subs'
@@ -48,17 +20,25 @@ CLOBBER.include('ps','mps')
 file_hash = Hash[orig_cel_files.zip(cel_files)]
 
 ######################## Get the GSE from NCBI
-if defined? gse
-  gse_url = "http://www.ncbi.nlm.nih.gov/geosuppl/?acc=#{gse}"
+if defined? GSE
+  gse_url = "http://www.ncbi.nlm.nih.gov/geosuppl/?acc=#{GSE}"
   
-  directory orig_cel_dir
-  tar_file = File.join(orig_cel_dir, "#{gse}.tar")
-  file tar_file => orig_cel_dir do |f|
+  directory Orig_cel_dir
+  tar_file = File.join(Orig_cel_dir, "#{GSE}.tar")
+  file tar_file => Orig_cel_dir do |f|
     sh "curl -o #{f.name} #{gse_url}"
   end
+  #CLOBBER.include(Orig_cel_dir, tar_file) uncomment to clobber
+  # the the downloaded tar file
   
-  file "#{orig_cel_files[0]}.gz" => tar_file do |f|
-    sh "cd #{orig_cel_dir} && tar -xvf #{gse}.tar"
+  
+  # the m switch tells tar to give the extracted
+  # data a current timestamp.  This will keep the cel_files
+  # newer than the tar file.  Otherwise they keep getting downloaded
+  orig_cel_files.map{|cel| "#{cel}.gz"}.each do |cel_gz|
+    file cel_gz => tar_file do |f|
+      sh "tar -mxvf #{f.prerequisites[0]} -C #{Orig_cel_dir}"
+    end
   end
   
   orig_cel_files.each do |cel|
@@ -67,18 +47,17 @@ if defined? gse
     end
   end
   
-#  CLOBBER.include(File.join(tar_file))
-  CLOBBER.include(File.join(orig_cel_dir, '*.gz'))
-  CLOBBER.include(File.join(orig_cel_dir, '*.CEL'))
+  CLOBBER.include(File.join(Orig_cel_dir, '*.gz'))
+  CLOBBER.include(File.join(Orig_cel_dir, '*.CEL'))
 else
   # put some code in here to fetch/unpack your data if needed
 end
 
 ######################## Copy Files
-directory cel_dir
-CLOBBER.include(cel_dir)
+directory Cel_dir
+CLOBBER.include(Cel_dir)
 file_hash.each do |orig_name, new_name|
-  file new_name => [orig_name, cel_dir] do |f|
+  file new_name => [orig_name, Cel_dir] do |f|
     puts "copying #{f.prerequisites[0]} to #{f.name}"
     cp f.prerequisites[0], f.name
   end
@@ -110,7 +89,7 @@ action = 'rma-sketch'
 summary_proc = ->(ps_or_mps) {"#{ps_or_mps}/rma-sketch.summary.txt"}
 ps_mps_task( summary_proc, cel_files + [cel_file_txt]) do |ps_or_mps|
     ps_or_mps_flag = ps_or_mps == 'ps' ? "-s" : "-m"
-    ps_or_mps_lib = "#{libBase}.dt1.hg18.#{probe_category}.#{ps_or_mps}"
+    ps_or_mps_lib = "#{libBase}.dt1.hg18.#{Probe_category}.#{ps_or_mps}"
     cmd = "#{apt} -a #{action} -p #{pgf} -c #{clf} #{ps_or_mps_flag} #{ps_or_mps_lib} -b #{bgp} -o #{ps_or_mps} --qc-probesets #{qcc} --cel-files #{cel_file_txt}"
     sh cmd
 end
@@ -134,12 +113,12 @@ def cond_bed_name(ps_or_mps, cond)
   "#{ps_or_mps}/#{cond}.bed"
 end
 
-conditions.each do |cond|
+Conditions.each do |cond|
   # this proc will close over cond
   cond_bed_proc = ->(ps_or_mps) { cond_bed_name(ps_or_mps, cond) }
   ps_mps_task(cond_bed_proc, rep_average_proc) do |ps_or_mps, f|
     track_name = "raw_#{cond}"
-    track_desc = "Raw Expression Values for #{cond}, #{probe_category} probesets"
+    track_desc = "Raw Expression Values for #{cond}, #{Probe_category} probesets"
     bed_from_ps(f.prerequisites[0], cond, f.name, track_name, track_desc)
     sh "gzip -cv #{f.name} > #{f.name}.gz"
   end
@@ -148,7 +127,7 @@ end
 ######################## Combine the condition specific bed files and compress
 multi_bed_proc = ->(ps_or_mps) { "#{ps_or_mps}/raw_multi.bed" }
 all_cond_beds_proc = ->(ps_or_mps) do
-  conditions.map{|cond| cond_bed_name(ps_or_mps, cond)}
+  Conditions.map{|cond| cond_bed_name(ps_or_mps, cond)}
 end
 ps_mps_task(multi_bed_proc, all_cond_beds_proc) do |ps_or_mps, f|
   f.prerequisites.each do |bed_file|
@@ -168,13 +147,13 @@ mean_bed_proc = ->(ps_or_mps) {"#{ps_or_mps}/all_tp_mean.bed"}
   # of replicates in each condition
 ps_mps_task(mean_bed_proc, expr_proc) do |ps_or_mps, f|
     track_name = "raw_tp_mean"
-    track_desc = "Raw Expression Values Averaged Across All Time Points, #{probe_category}.#{ps_or_mps}"
+    track_desc = "Raw Expression Values Averaged Across All Time Points, #{Probe_category}.#{ps_or_mps}"
     make_average_bed(f.prerequisites[0], f.name, track_name, track_desc)
 end
 
 #################### Normalize data
 
-data_normalizer = make_data_normalizer(control_name)
+data_normalizer = make_data_normalizer(Control_name)
 #this is a proc/lambda
 norm_avg_proc = ->(ps_or_mps) {"#{ps_or_mps}/norm_avg.#{ps_or_mps}"}
 ps_mps_task(norm_avg_proc, rep_average_proc) do |ps_or_mps, f|
@@ -183,6 +162,7 @@ end
 
 
 ##################### 2-fold up and down
+
 
 
 
