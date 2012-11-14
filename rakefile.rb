@@ -6,7 +6,7 @@ tar_file = '../Raw_Her2.tar'
 # uncomment and set to gse number to use a gse
 # gse =
 
-cel_file_names = %w[
+orig_cel_names = %w[
   GFP_0.CEL
   GFP_1.CEL
   HER2_0.CEL
@@ -15,27 +15,34 @@ cel_file_names = %w[
 
 probe_category = 'comprehensive'
 
-orig_cel_dir = '../Raw_HER2'
-# set to '..' if using a gse
+orig_cel_dir = if defined? gse
+  '..'
+  else
+  # This points to your input cel files if you not downloading a gse
+  '../Raw_HER2'
+end
 
 conditions = %w[control her2]
 
+control_name = 'control'
+
 n_reps = 2
 
+cel_dir = 'cel_data'
 # Replace this if your data are not in simple replicates
 # Meaning you did a different number of reps for each condition
-cel_files = conditions.each_with_object([]) do |cond, acc|
-  n_reps.times {|i| acc << "#{cond}_#{i+1}.CEL"}
+cel_files = conditions.inject([]) do |acc, cond|
+  n_reps.times {|i| acc << File.join(cel_dir, "#{cond}_#{i+1}")}
+  acc
 end
-
 
 #######################################
 ## Below here might not need editing if all goes well.
 
-orig_cel_files = cel_file_names.map{|cel| File.join(orig_cel_dir, cel)}
+orig_cel_files = orig_cel_names.map{|cel| File.join(orig_cel_dir, cel)}
 
 require 'rake/clean'
-require './mar_subs'
+require_relative 'lib/mar_subs'
 
 CLOBBER.include('ps','mps')
 
@@ -63,8 +70,10 @@ else
 end
 
 ######################## Copy Files
+directory cel_dir
+CLOBBER.include(cel_dir)
 file_hash.each do |orig_name, new_name|
-  file new_name => orig_name do |f|
+  file new_name => [orig_name, cel_dir] do |f|
     puts "copying #{f.prerequisites[0]} to #{f.name}"
     cp f.prerequisites[0], f.name
   end
@@ -120,22 +129,24 @@ def cond_bed_name(ps_or_mps, cond)
   "#{ps_or_mps}/#{cond}.bed"
 end
 
-cond_bed_proc = ->(ps_or_mps) { cond_bed_name(ps_or_mps, conditions[-1]) }
-ps_mps_task(cond_bed_proc, rep_average_proc) do |ps_or_mps, f|
-  conditions.each do |cond|
+conditions.each do |cond|
+  # this proc will close over cond
+  cond_bed_proc = ->(ps_or_mps) { cond_bed_name(ps_or_mps, cond) }
+  ps_mps_task(cond_bed_proc, rep_average_proc) do |ps_or_mps, f|
     track_name = "raw_#{cond}"
     track_desc = "Raw Expression Values for #{cond}, #{probe_category} probesets"
-    out_file_name = cond_bed_name(ps_or_mps, cond)
-    bed_from_ps(f.prerequisites[0], cond, out_file_name, track_name, track_desc)
-    sh "gzip -cv #{out_file_name} > #{out_file_name}.gz"
+    bed_from_ps(f.prerequisites[0], cond, f.name, track_name, track_desc)
+    sh "gzip -cv #{f.name} > #{f.name}.gz"
   end
 end
 
 ######################## Combine the condition specific bed files and compress
 multi_bed_proc = ->(ps_or_mps) { "#{ps_or_mps}/raw_multi.bed" }
-ps_mps_task(multi_bed_proc, cond_bed_proc) do |ps_or_mps, f|
-  conditions.each do |cond|
-    bed_file = cond_bed_name(ps_or_mps, cond)
+all_cond_beds_proc = ->(ps_or_mps) do
+  conditions.map{|cond| cond_bed_name(ps_or_mps, cond)}
+end
+ps_mps_task(multi_bed_proc, all_cond_beds_proc) do |ps_or_mps, f|
+  f.prerequisites.each do |bed_file|
     sh "cat #{bed_file} >> #{f.name}"
   end
 end
@@ -158,6 +169,15 @@ end
 
 #################### Normalize data
 
+data_normalizer = make_data_normalizer(control_name)
+#this is a proc/lambda
+norm_avg_proc = ->(ps_or_mps) {"#{ps_or_mps}/norm_avg.#{ps_or_mps}"}
+ps_mps_task(norm_avg_proc, rep_average_proc) do |ps_or_mps, f|
+  data_normalizer.(f.prerequisites[0], f.name)
+end
+
+
+##################### 2-fold up and down
 
 
 
