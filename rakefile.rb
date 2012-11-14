@@ -15,7 +15,7 @@ orig_cel_names = %w[
 probe_category = 'comprehensive'
 
 orig_cel_dir = if defined? gse
-  '..'
+  '../gse'
   else
   # This points to your input cel files if you not downloading a gse
   '../Raw_HER2'
@@ -50,17 +50,24 @@ file_hash = Hash[orig_cel_files.zip(cel_files)]
 ######################## Get the GSE from NCBI
 if defined? gse
   gse_url = "http://www.ncbi.nlm.nih.gov/geosuppl/?acc=#{gse}"
-
-  tar_file = "#{gse}.tar"
-  file tar_file do |f|
-    sh "curl -o #{File.join(orig_cel_dir, f.name)} #{gse_url}"
+  
+  directory orig_cel_dir
+  tar_file = File.join(orig_cel_dir, "#{gse}.tar")
+  file tar_file => orig_cel_dir do |f|
+    sh "curl -o #{f.name} #{gse_url}"
   end
-
-  file orig_cel_files[-1] => tar_file do |f|
-    sh "tar xvf #{File.join(orig_cel_dir, f.prerequisites[0])}"
-    sh "gunzip -v #{File.join(orig_cel_dir,'*.gz')}"
+  
+  file "#{orig_cel_files[0]}.gz" => tar_file do |f|
+    sh "cd #{orig_cel_dir} && tar -xvf #{gse}.tar"
   end
-  CLOBBER.include(File.join(orig_cel_dir, tar_file))
+  
+  orig_cel_files.each do |cel|
+    file cel => "#{cel}.gz" do |f|
+      sh "gunzip -cv #{f.prerequisites[0]} > #{f.name}"
+    end
+  end
+  
+#  CLOBBER.include(File.join(tar_file))
   CLOBBER.include(File.join(orig_cel_dir, '*.gz'))
   CLOBBER.include(File.join(orig_cel_dir, '*.CEL'))
 else
