@@ -150,10 +150,6 @@ def add_norm_header(fio, id_name, control_name, treatments)
   save_ar(fio, [id_name, control_name] + treatments)
 end
 
-def make_line_hash(line_ar, header_ar)
-  Hash[header_ar.zip(line_ar)]
-end
-
 def parse_line_hash(line_hash, control_name, treatments)
   control_val = line_hash[control_name]
   treat_data = line_hash.values_at(*treatments)
@@ -188,7 +184,7 @@ def make_data_normalizer(control_col_name = 'control', id_col_name = 'ps_or_tc' 
         add_norm_header(fio_out, id_col_name, control_col_name, treatment_cols)
         msg = "Normalizing #{datafile_in} -> #{datafile_out}"
         fio_in.with_progress(msg).inject(fio_out) do |fout, line|
-          line_hash = make_line_hash(line.split, header_ar)
+          line_hash = make_line_hash(line, header_ar)
           id = line_hash[id_col_name]
           control_val = line_hash[control_col_name]
           treat_data = line_hash.values_at(*treatment_cols)
