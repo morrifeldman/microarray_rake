@@ -1,230 +1,179 @@
 
 # Edit the following to adjust to your microarray data:
-gse = 'GSE24391'
+#####################################################
+tar_file = '../Raw_Her2.tar'
 
-probe_category = 'comprehensive'
-ps_or_mps = 'ps'
+# uncomment and set to gse number to use a gse
+# gse =
 
-cel_files = %w[
-  GSM601318.CEL
-  GSM601319.CEL
-  GSM601320.CEL
-  GSM601321.CEL
-  GSM601322.CEL
-  GSM601323.CEL
-  GSM601324.CEL
-  GSM601325.CEL
-  GSM601326.CEL
-  GSM601327.CEL
-  GSM601328.CEL
-  GSM601329.CEL
-  GSM601330.CEL
-  GSM601331.CEL
-  GSM601332.CEL
-  GSM601333.CEL
-  GSM601334.CEL
-  GSM601335.CEL
-  GSM601336.CEL
-  GSM601337.CEL
-  GSM601338.CEL
+cel_file_names = %w[
+  GFP_0.CEL
+  GFP_1.CEL
+  HER2_0.CEL
+  HER2_1.CEL
 ]
 
-conditions = %w[E000 E020 E040 E060 E120 E240 E480]
+probe_category = 'comprehensive'
 
-# Below here might not need editing if all goes well.
+orig_cel_dir = '../Raw_HER2'
+# set to '..' if using a gse
 
-gse_url = "http://www.ncbi.nlm.nih.gov/geosuppl/?acc=#{gse}"
+conditions = %w[control her2]
+
+n_reps = 2
+
+# Replace this if your data are not in simple replicates
+# Meaning you did a different number of reps for each condition
+cel_files = conditions.each_with_object([]) do |cond, acc|
+  n_reps.times {|i| acc << "#{cond}_#{i+1}.CEL"}
+end
+
+
+#######################################
+## Below here might not need editing if all goes well.
+
+orig_cel_files = cel_file_names.map{|cel| File.join(orig_cel_dir, cel)}
 
 require 'rake/clean'
-require 'debugger'
-require 'subroutines'
-require 'progress'
+require './mar_subs'
 
-CLOBBER.include(probe_category, '*.CEL', '*.gz', '*_*', 'replicates.txt')
-CLOBBER.include("#{gse}.tar")
+CLOBBER.include('ps','mps')
 
+file_hash = Hash[orig_cel_files.zip(cel_files)]
+
+######################## Get the GSE from NCBI
+if defined? gse
+  gse_url = "http://www.ncbi.nlm.nih.gov/geosuppl/?acc=#{gse}"
+
+  tar_file = "#{gse}.tar"
+  file tar_file do |f|
+    sh "curl -o #{File.join(orig_cel_dir, f.name)} #{gse_url}"
+  end
+
+  file orig_cel_files[0] => tar_file do
+    debugger
+    sh "tar xvf #{File.join(orig_cel_dir, f.prerequisites[0])}"
+    sh "gunzip -v #{File.join(orig_cel_dir,'*.gz')}"
+  end
+  CLOBBER.include(File.join(orig_cel_dir, tarfile))
+  CLOBBER.include(File.join(orig_cel_dir, '*.gz'))
+  CLOBBER.include(File.join(orig_cel_dir, '*.CEL'))
+else
+  # put some code in here to fetch/unpack your data if needed
+end
+
+######################## Copy Files
+file_hash.each do |orig_name, new_name|
+  file new_name => orig_name do |f|
+    puts "copying #{f.prerequisites[0]} to #{f.name}"
+    cp f.prerequisites[0], f.name
+  end
+  CLOBBER.include(new_name)
+end
+
+######################### Create cel_files.txt
+cel_file_txt = 'cel_files.txt'
+file 'cel_files.txt' => cel_files do
+  File.open(cel_file_txt,'w') do |io|
+    io << "cel_files\n"
+    io << cel_files.join("\n")
+  end
+end
+CLOBBER.include(cel_file_txt)
+
+######### Configuration for APT, requires AFFX_ANALYSIS_FILES_PATH to be set
 celDir = File.absolute_path('.')
 celFiles = File.join(celDir,'*.CEL')
 libBase = 'HuEx-1_0-st-v2.r2'
 pgf = libBase + '.pgf'
 clf = libBase + '.clf'
-ps_or_mps_lib = "#{libBase}.dt1.hg18.#{probe_category}.#{ps_or_mps}"
 qcc = libBase + '.qcc'
 bgp = libBase + '.antigenomic.bgp'
 apt = 'apt-probeset-summarize'
 action = 'rma-sketch'
 
-replicates = conditions.each_with_object([]) do |cond, acc|
-  3.times {|i| acc << "#{cond}_#{i+1}"}
+############################## APT Summarize
+summary_proc = ->(ps_or_mps) {"#{ps_or_mps}/rma-sketch.summary.txt"}
+ps_mps_task( summary_proc, cel_files + [cel_file_txt]) do |ps_or_mps|
+    ps_or_mps_flag = ps_or_mps == 'ps' ? "-s" : "-m"
+    ps_or_mps_lib = "#{libBase}.dt1.hg18.#{probe_category}.#{ps_or_mps}"
+    cmd = "#{apt} -a #{action} -p #{pgf} -c #{clf} #{ps_or_mps_flag} #{ps_or_mps_lib} -b #{bgp} -o #{ps_or_mps} --qc-probesets #{qcc} --cel-files #{cel_file_txt}"
+    sh cmd
 end
 
-file_hash = Hash[cel_files.zip(replicates)]
-
-tar_file = "#{gse}.tar"
-file tar_file do |f|
-  sh "curl -o #{f.name} #{gse_url}"
-end
-
-file cel_files[0] => tar_file do
-  sh "tar xvf #{gse}.tar"
-  sh "gunzip -v *.gz"
-  file_hash.each do |orig_name, new_name|
-    puts "moving #{orig_name} to #{new_name}"
-    mv orig_name, new_name
-  end
-end
-
-ps_or_tc = ps_or_mps == 'ps' ? 'ps' : 'tc'
-
-cel_file_txt = 'cel_files.txt'
-file "#{probe_category}/rma-sketch.summary.txt" => cel_files[0] do
-  File.open(cel_file_txt,'w') do |io|
-    io << "cel_files\n"
-    io << replicates.join("\n")
-  end
-  ps_or_mps_flag = ps_or_mps == 'ps' ? "-s" : "-m"
-  cmd = "#{apt} -a #{action} -p #{pgf} -c #{clf} #{ps_or_mps_flag} #{ps_or_mps_lib} -b #{bgp} -o #{probe_category} --qc-probesets #{qcc} --cel-files #{cel_file_txt}"
-  sh cmd
-end
-
-file "#{probe_category}/expr.#{ps_or_tc}" => "#{probe_category}/rma-sketch.summary.txt" do |f|
+############################### RemoveAffyHeader
+expr_proc = ->(ps_or_mps) {"#{ps_or_mps}/expr.#{ps_or_mps}"}
+ps_mps_task(expr_proc, summary_proc) do |ps_or_mps, f|
+  puts "Striping Affy Header"
   sh "removeAffyHeader.rb -f #{f.prerequisites[0]} -o #{f.name}"
 end
 
-def parse_header(header)
-  # This function expect that the replicates will be deliminated by '_'
-  # e.g. E000_1 E000_2 are replicates
-  head_base = header.map{|h| h.split('_')[0]}
-  head_base.each_with_index.with_object({}) do |(c, i), h|
-    h[c] ||= []
-    h[c] << i
-  end
-end
-
-def avg_line_reps(data_row_ar, cond_hash)
-  cond_hash.each_value.with_object([]) do |rep_cols, acc|
-    acc << rep_cols.map{|col| data_row_ar[col].to_f}.mean
-  end
-end
-
-
-def average_replicates(in_file_name, out_file_name)
-  File.open(in_file_name) do |f_in|
-    header = f_in.gets.split
-    cond_hash = parse_header(header[1..-1])
-    cond_hash.each {|cond, cols| puts "#{cond} => #{cols}"}
-    File.open(out_file_name, 'w') do |f_out|
-      f_out << "ps_or_tc\t" << cond_hash.keys.join("\t") << "\n"
-      f_in.each.with_progress('Averaging Replicates') do |line|
-        line_ar = line.split
-        out_ar = [line_ar.shift]
-        out_ar << avg_line_reps(line_ar, cond_hash)
-        f_out << out_ar.join("\t") << "\n"
-      end
-    end
-  end
-end
-
-file "#{probe_category}/rep_average.#{ps_or_tc}" => "#{probe_category}/expr.#{ps_or_tc}" do |f|
+############################## Average Replicates
+rep_average_proc = ->(ps_or_mps) {"#{ps_or_mps}/rep_average.#{ps_or_mps}"}
+ps_mps_task(rep_average_proc, expr_proc) do |ps_or_mps, f|
   average_replicates(f.prerequisites[0], f.name)
 end
 
-def add_bed_header(file_io, name, desc)
-  file_io << 'track type=bedGraph visibility=full color=0,0,0 altColor=127,127,127 autoScale=on graphType=bar alwaysZero=off windowingFunction=mean smoothingWindow=8 maxHeightPixels=64:64:8 '
-  file_io << %Q[description='#{desc}' ] unless desc.nil?
-  file_io << %Q[name='#{name}' \n] unless name.nil?
+
+############################## Make condition specific bedfiles
+def cond_bed_name(ps_or_mps, cond)
+  "#{ps_or_mps}/#{cond}.bed"
 end
 
-def make_line_hash(line, header)
-  Hash[header.zip(line.split)]
-end
-
-def form_bed_line(line, header, col, dict)
-  ps_col = header[0]
-  line_hash = make_line_hash(line, header)
-  val = line_hash[col]
-  ps = line_hash[ps_col]
-  coord = dict[ps]
-  coord.nil? ? '' : "#{coord}\t#{val}\n"
-end
-    
-def fill_bed(in_file_name, col, out_file_io)
-  puts "Loading Dictionary"
-  dict = readKyotoHash('ps2bed')
-  File.open(in_file_name) do |f_in|
-    header = f_in.gets.split
-    progress_msg = "Filling Bed with #{col} from #{in_file_name}"
-    f_in.each.with_progress(progress_msg) do |line|
-      out_file_io << form_bed_line(line, header, col, dict)
-    end
-  end
-end
-
-def bed_from_ps(in_file_name, col, out_file_name, track_name = nil, desc = nil)
-  track_name ||= in_file_name
-  File.open(out_file_name, 'w') do |out_file_io|
-    add_bed_header(out_file_io, track_name, desc)
-    fill_bed(in_file_name, col, out_file_io)
-  end
-end
-
-def bed_name(cond, probe_category)
-  "#{probe_category}/#{cond}.bed"
-end
-
-example_bed = "#{probe_category}/#{conditions[0]}.bed"
-file example_bed => "#{probe_category}/rep_average.#{ps_or_tc}" do |f|
+cond_bed_proc = ->(ps_or_mps) { cond_bed_name(ps_or_mps, conditions[-1]) }
+ps_mps_task(cond_bed_proc, rep_average_proc) do |ps_or_mps, f|
   conditions.each do |cond|
     track_name = "raw_#{cond}"
     track_desc = "Raw Expression Values for #{cond}, #{probe_category} probesets"
-    out_file_name = bed_name(cond, probe_category)
+    out_file_name = cond_bed_name(ps_or_mps, cond)
     bed_from_ps(f.prerequisites[0], cond, out_file_name, track_name, track_desc)
     sh "gzip -cv #{out_file_name} > #{out_file_name}.gz"
   end
 end
 
-def form_avg_bed_line(line, dict)
-  line_ar = line.split
-  ps = line_ar.shift
-  mean = line_ar.map{|e| e.to_f}.mean
-  coord = dict[ps]
-  coord.nil? ? '' : "#{coord}\t#{mean}\n"
-end
-
-def fill_avg_bed(in_file_name, out_file_io)
-  puts "Loading Dictionary"
-  dict = readKyotoHash('ps2bed')
-  File.open(in_file_name) do |f_in|
-    header = f_in.gets.split
-    progress_msg = "Filling Average Bed from #{in_file_name}"
-    f_in.each.with_progress(progress_msg) do |line|
-      out_file_io << form_avg_bed_line(line, dict)
-    end
-  end
-end
-
-def make_average_bed(in_file_name, out_file_name, track_name, track_desc)
-  track_name ||= in_file_name
-  File.open(out_file_name, 'w') do |out_file_io|
-    add_bed_header(out_file_io, track_name, track_desc)
-    fill_avg_bed(in_file_name, out_file_io)
-  end
-end
-
-mean_bed = "#{probe_category}/all_tp_mean.bed"
-file mean_bed => "#{probe_category}/expr.#{ps_or_tc}" do |f|
-  track_name = "raw_tp_mean"
-  track_desc = "Raw Expression Values Averaged Across All Time Points, #{probe_category}.#{ps_or_mps}"
-  make_average_bed(f.prerequisites[0], f.name, track_name, track_desc)
-end
-
-multi_bed_file = "#{probe_category}/raw_multi.bed"
-file "#{multi_bed_file}.gz" => example_bed do
+######################## Combine the condition specific bed files and compress
+multi_bed_proc = ->(ps_or_mps) { "#{ps_or_mps}/raw_multi.bed" }
+ps_mps_task(multi_bed_proc, cond_bed_proc) do |ps_or_mps, f|
   conditions.each do |cond|
-    bed_file = bed_name(cond, probe_category)
-    sh "cat #{bed_file} >> #{multi_bed_file}"
+    bed_file = cond_bed_name(ps_or_mps, cond)
+    sh "cat #{bed_file} >> #{f.name}"
   end
-  sh "gzip -v #{multi_bed_file}"
 end
 
-task :default => ["#{multi_bed_file}.gz", mean_bed]
+multi_bed_gz_proc = ->(ps_or_mps) { "#{multi_bed_proc.(ps_or_mps)}.gz"}
+ps_mps_task(multi_bed_gz_proc, multi_bed_proc) do |ps_or_mps, f|
+  sh "gzip -cv #{f.prerequisites[0]} > #{f.name}"
+end
+
+
+########################### Make mean bed files across all datapoints
+mean_bed_proc = ->(ps_or_mps) {"#{ps_or_mps}/all_tp_mean.bed"}
+  # we average the raw data, because there might be a different number
+  # of replicates in each condition
+ps_mps_task(mean_bed_proc, expr_proc) do |ps_or_mps, f|
+    track_name = "raw_tp_mean"
+    track_desc = "Raw Expression Values Averaged Across All Time Points, #{probe_category}.#{ps_or_mps}"
+    make_average_bed(f.prerequisites[0], f.name, track_name, track_desc)
+end
+
+#################### Normalize data
+
+
+
+
+
+=begin
+
+now we need to get down to business,  Find up and down regulated genes
+
+1) Normalize data vs control
+2) Label with gs_nm_ps or gs_nm_mps
+3) For each condition, two fold up, two fold down
+4) Same thing but with fdr, rely on matlab for this
+5) 1 bed files for each condition, signal relative to control ps and mps
+    This show up/down regulation at the probe or mps level
+6) Ratio bedfiles
+    ps (full) / mps (comprehensive) helps to see intron vs exon (pre vs mature)
+    ps (comprehensive) / mps (comprehensive) helps to look for isoform variation
+
+=end
