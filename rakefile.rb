@@ -1,7 +1,6 @@
 
 # Edit the following to adjust to your microarray data:
 #####################################################
-tar_file = '../Raw_Her2.tar'
 
 # uncomment and set to gse number to use a gse
 # gse =
@@ -57,12 +56,11 @@ if defined? gse
     sh "curl -o #{File.join(orig_cel_dir, f.name)} #{gse_url}"
   end
 
-  file orig_cel_files[0] => tar_file do
-    debugger
+  file orig_cel_files[-1] => tar_file do |f|
     sh "tar xvf #{File.join(orig_cel_dir, f.prerequisites[0])}"
     sh "gunzip -v #{File.join(orig_cel_dir,'*.gz')}"
   end
-  CLOBBER.include(File.join(orig_cel_dir, tarfile))
+  CLOBBER.include(File.join(orig_cel_dir, tar_file))
   CLOBBER.include(File.join(orig_cel_dir, '*.gz'))
   CLOBBER.include(File.join(orig_cel_dir, '*.CEL'))
 else
