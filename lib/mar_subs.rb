@@ -243,23 +243,50 @@ def make_col_thresh_filter(thresh)
   # let's assume if given a + threshold we want to use > and for
   # a neg one we want to use <
   ->(data, col_index) do
-    data.select do |line|
+    data.with_progress('Filtering ...').select do |line|
       col_val = line.split[col_index].to_f
       (thresh > 0) ? col_val > thresh : col_val < thresh
     end
   end
 end
 
-def make_col_sorter(thresh)
-  ->(data, col_index) do
-    direction = thresh <=> 0.0
-    data.sort_by { |line| line.split[col_index].to_f * - direction}
+def make_all_col_thresh_filter(thresh)
+  ->(data) do
+    data.with_progress('Filtering ...').select do |line|
+      line_ar = line.split.map{|e| e.to_f}[1..-1] # get rid of the id col
+      (thresh > 0) ? line_ar.max > thresh : line_ar.min < thresh
+    end
   end
 end
 
-def apply_proc_with_col(data_in, col_name, &filter)
+def sign(number)
+  number <=> 0.0
+end
+
+def make_all_col_sorter(thresh)
+  ->(data) do
+    data.sort_by { |line| line.split.map{|e| e.to_f}.max * -sign(thresh) }
+  end
+end
+    
+
+def make_col_sorter(thresh)
+  ->(data, col_index) do
+    data.sort_by { |line| line.split[col_index].to_f * - sign(thresh)}
+  end
+end
+
+def apply_proc_with_col(data_in, col, &filter)
+  apply_proc(data_in, col, &filter)
+end
+
+def apply_proc(data_in, col_name = nil, &filter)
   data, header_line, col_index = process_data_header(data_in, col_name)
-  filtered_data = filter.(data, col_index)
+  filtered_data = if col_name
+    filter.(data, col_index)
+    else
+    filter.(data)
+  end
   # Close the data_io if we opened it
   data.close unless data_in.is_a? Enumerable
   # put the header back onto our output
