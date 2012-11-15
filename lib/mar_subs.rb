@@ -217,7 +217,7 @@ def expand_id_cmd(infile, outfile)
   %Q[geneConvert.rb -c tc2gs tc2refSeq -a '_' -f #{infile} -o #{outfile}]
 end
 
-######################## 2-fold
+######################## Threshold and sort
 # steps:
 # 1. read the data in to an array:
 #          throwing away values where the value in the col is < threshold

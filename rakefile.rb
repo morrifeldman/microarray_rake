@@ -166,7 +166,7 @@ expand_id(norm_avg_proc)
 ##################### 2-fold up and down
 treatments = Conditions.reject{|e| e == Control_name}
 treatments.each do |treat|
-  [1, -1].each do |thresh|
+  [Threshold, -Threshold].each do |thresh|
   
     up_down_proc = ->(ps_or_mps) do
       up_or_down = (thresh > 0) ? 'up' : 'down'
@@ -185,7 +185,7 @@ treatments.each do |treat|
 end
 
 ###################### 2-fold up and down across all treatments
-[1, -1].each do |thresh|
+[Threshold, -Threshold].each do |thresh|
   all_up_down_proc = ->(ps_or_mps) do
     up_or_down = (thresh > 0) ? 'up' : 'down'
     "#{ps_or_mps}/all_#{up_or_down}.#{ps_or_mps}"
