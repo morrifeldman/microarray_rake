@@ -27,3 +27,5 @@ Control_name = 'control'
 N_reps = 2
 
 Cel_dir = 'cel_data'
+
+Threshold = 0.75

@@ -166,7 +166,7 @@ expand_id(norm_avg_proc)
 ##################### 2-fold up and down
 treatments = Conditions.reject{|e| e == Control_name}
 treatments.each do |treat|
-  [1, -1].each do |thresh|
+  [Threshold, -Threshold].each do |thresh|
   
     up_down_proc = ->(ps_or_mps) do
       up_or_down = (thresh > 0) ? 'up' : 'down'
@@ -184,7 +184,25 @@ treatments.each do |treat|
   end
 end
 
-
+###################### 2-fold up and down across all treatments
+[Threshold, -Threshold].each do |thresh|
+  all_up_down_proc = ->(ps_or_mps) do
+    up_or_down = (thresh > 0) ? 'up' : 'down'
+    "#{ps_or_mps}/all_#{up_or_down}.#{ps_or_mps}"
+  end
+  
+  ps_mps_task(all_up_down_proc, norm_avg_proc) do |ps_or_mps, f|
+    all_thresh_filter = make_all_col_thresh_filter(thresh)
+    filt_data = apply_proc(f.prerequisites[0], &all_thresh_filter)
+    all_col_sorter = make_all_col_sorter(thresh)
+    sort_data = apply_proc(filt_data, &all_col_sorter)
+    File.write(f.name, sort_data.join)
+  end
+  
+  expand_id(all_up_down_proc)
+end
+  
+  
 =begin
 
 now we need to get down to business,  Find up and down regulated genes
