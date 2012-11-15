@@ -170,7 +170,7 @@ treatments.each do |treat|
   
     up_down_proc = ->(ps_or_mps) do
       up_or_down = (thresh > 0) ? 'up' : 'down'
-      "#{ps_or_mps}/#{up_or_down}.#{ps_or_mps}"
+      "#{ps_or_mps}/#{treat}_#{up_or_down}.#{ps_or_mps}"
     end
     
     ps_mps_task(up_down_proc, norm_avg_proc) do |ps_or_mps, f|
