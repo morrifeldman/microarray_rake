@@ -100,13 +100,14 @@ ps_mps_task(expr_proc, summary_proc) do |ps_or_mps, f|
   puts "Striping Affy Header"
   sh "removeAffyHeader.rb -f #{f.prerequisites[0]} -o #{f.name}"
 end
+expand_id(expr_proc)
 
 ############################## Average Replicates
 rep_average_proc = ->(ps_or_mps) {"#{ps_or_mps}/rep_average.#{ps_or_mps}"}
 ps_mps_task(rep_average_proc, expr_proc) do |ps_or_mps, f|
   average_replicates(f.prerequisites[0], f.name)
 end
-
+expand_id( rep_average_proc)
 
 ############################## Make condition specific bedfiles
 def cond_bed_name(ps_or_mps, cond)
@@ -159,12 +160,29 @@ norm_avg_proc = ->(ps_or_mps) {"#{ps_or_mps}/norm_avg.#{ps_or_mps}"}
 ps_mps_task(norm_avg_proc, rep_average_proc) do |ps_or_mps, f|
   data_normalizer.(f.prerequisites[0], f.name)
 end
+expand_id(norm_avg_proc)
 
 
 ##################### 2-fold up and down
-
-
-
+treatments = Conditions.reject{|e| e == Control_name}
+treatments.each do |treat|
+  [1, -1].each do |thresh|
+  
+    up_down_proc = ->(ps_or_mps) do
+      up_or_down = (thresh > 0) ? 'up' : 'down'
+      "#{ps_or_mps}/#{up_or_down}.#{ps_or_mps}"
+    end
+    
+    ps_mps_task(up_down_proc, norm_avg_proc) do |ps_or_mps, f|
+      thresh_filter = make_col_thresh_filter(thresh)
+      filt_data = apply_proc_with_col(f.prerequisites[0], treat, &thresh_filter)
+      sorter = make_col_sorter(thresh)
+      sort_data = apply_proc_with_col(filt_data, treat, &sorter)
+      File.write(f.name, sort_data.join)
+    end
+    expand_id(up_down_proc)
+  end
+end
 
 
 =begin
