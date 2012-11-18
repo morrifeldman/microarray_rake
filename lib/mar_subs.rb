@@ -265,7 +265,11 @@ end
 
 def make_all_col_sorter(thresh)
   ->(data) do
-    data.sort_by { |line| line.split.map{|e| e.to_f}.max * -sign(thresh) }
+    direction = -sign(thresh)
+    data.sort_by do |line|
+      float_line = line.split.map{|e| e.to_f}
+      (thresh > 0) ? float_line.max * direction : float_line.min * direction
+    end
   end
 end
     
